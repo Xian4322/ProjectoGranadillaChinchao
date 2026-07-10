@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simulador 3D - Riego Chinchao</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css">
+    <style>
+        :root {
+            --surface-1: #1e1e1e;
+            --surface-2: #2a2a2a;
+            --border: #444;
+            --text-primary: #fff;
+            --text-secondary: #ccc;
+            --text-muted: #888;
+            --radius: 8px;
+        }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #121212;
+            color: var(--text-primary);
+            padding: 20px;
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .container {
+            width: 100%;
+            max-width: 900px;
+        }
+        button {
+            background: #333;
+            color: white;
+            border: 1px solid #555;
+            padding: 8px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            transition: 0.2s;
+        }
+        button:hover {
+            background: #444;
+            border-color: #777;
+        }
+        #btn-all { background: #2563eb; border-color: #1d4ed8; }
+        #btn-all:hover { background: #1d4ed8; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2 class="sr-only" style="position:absolute;width:1px;height:1px;overflow:hidden;">Simulador 3D interactivo del sistema de riego tecnificado e IoT para una hectárea de granadilla en pendiente de 60 grados en Chinchao, Huánuco, con reservorio, paneles solares, antenas Starlink y LoRaWAN, terrazas con tuberías laterales y sensores edafoclimáticos.</h2>
+    
+    <div style="display:flex;flex-wrap:wrap;gap:8px;margin:0 0 12px;">
+        <button id="btn-all">Vista completa</button>
+        <button id="btn-hydro"><i class="ti ti-droplet" aria-hidden="true" style="margin-right:4px"></i>Red hidráulica</button>
+        <button id="btn-elec"><i class="ti ti-bolt" aria-hidden="true" style="margin-right:4px"></i>Red eléctrica</button>
+        <button id="btn-data"><i class="ti ti-antenna-bars-5" aria-hidden="true" style="margin-right:4px"></i>Red de datos</button>
+    </div>
+    
+    <div id="scene-wrap" style="position:relative;width:100%;height:500px;border-radius:12px;overflow:hidden;background:var(--surface-1);border:0.5px solid var(--border);">
+        <canvas id="sim-canvas" style="display:block;width:100%;height:100%;cursor:grab;"></canvas>
+        
+        <div id="info-panel" style="position:absolute;top:12px;left:12px;max-width:250px;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius);padding:12px;display:none;box-shadow: 0 4px 12px rgba(0,0,0,0.5);">
+            <p id="info-title" style="font-weight:bold;font-size:15px;color:#38bdf8;margin:0 0 6px;"></p>
+            <p id="info-desc" style="margin:0;font-size:13px;color:var(--text-secondary);line-height:1.4;"></p>
+        </div>
+        
+        <div style="position:absolute;bottom:10px;right:12px;font-size:12px;color:var(--text-muted); background: rgba(0,0,0,0.6); padding: 4px 8px; border-radius: 4px;">
+            arrastra para rotar · rueda para zoom · toca un elemento
+        </div>
+    </div>
+    
+    <div style="display:flex;gap:16px;flex-wrap:wrap;margin-top:12px;font-size:13px;color:var(--text-secondary);">
+        <span style="display:flex; align-items:center;"><span style="display:inline-block;width:12px;height:12px;background:#185fa5;border-radius:3px;margin-right:6px;"></span>Hidráulica</span>
+        <span style="display:flex; align-items:center;"><span style="display:inline-block;width:12px;height:12px;background:#BA7517;border-radius:3px;margin-right:6px;"></span>Eléctrica</span>
+        <span style="display:flex; align-items:center;"><span style="display:inline-block;width:12px;height:12px;background:#7F77DD;border-radius:3px;margin-right:6px;"></span>Datos (IoT/Starlink)</span>
+        <span style="display:flex; align-items:center;"><span style="display:inline-block;width:12px;height:12px;background:#9fc46b;border-radius:3px;margin-right:6px;"></span>Terreno y Cultivo</span>
+    </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+
+<script>
+(function(){
+    var wrap = document.getElementById('scene-wrap');
+    var canvas = document.getElementById('sim-canvas');
+    var infoPanel = document.getElementById('info-panel');
+    var infoTitle = document.getElementById('info-title');
+    var infoDesc = document.getElementById('info-desc');
+
+    var scene = new THREE.Scene();
+    // Fallback por si clientWidth falla en la carga inicial
+    var width = wrap.clientWidth || window.innerWidth;
+    var height = wrap.clientHeight || 500;
+    
+    var camera = new THREE.PerspectiveCamera(45, width / height, 1, 2000);
+    var renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true, alpha: true });
+    
+    renderer.setClearColor(0x000000, 0);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    renderer.setSize(width, height);
+
+    scene.add(new THREE.AmbientLight(0xffffff, 0.75));
+    var dl = new THREE.DirectionalLight(0xffffff, 0.75);
+    dl.position.set(120, 180, 100);
+    scene.add(dl);
+
+    var target = new THREE.Vector3(0, 55, 95);
+    var radius = 260, theta = 0.65, phi = 1.05;
+    
+    function updateCamera(){
+        camera.position.x = target.x + radius * Math.sin(phi) * Math.sin(theta);
+        camera.position.y = target.y + radius * Math.cos(phi);
+        camera.position.z = target.z + radius * Math.sin(phi) * Math.cos(theta);
+        camera.lookAt(target);
+    }
+    updateCamera();
+
+    var hydroMeshes = [], elecMeshes = [], dataMeshes = [], terrainMeshes = [];
+
+    function addMesh(geo, color, x, y, z, opts){
+        opts = opts || {};
+        var mat = new THREE.MeshStandardMaterial({ color: color, roughness: 0.75, metalness: 0.05, transparent: true, opacity: 1 });
+        var mesh = new THREE.Mesh(geo, mat);
+        mesh.position.set(x, y, z);
+        if (opts.rotX) mesh.rotation.x = opts.rotX;
+        if (opts.rotY) mesh.rotation.y = opts.rotY;
+        if (opts.rotZ) mesh.rotation.z = opts.rotZ;
+        if (opts.info) mesh.userData.info = opts.info;
+        scene.add(mesh);
+        return mesh;
+    }
+
+    var terraceCount = 6, stepY = 16, stepZ = 36, topY = 100, thickness = 6, halfWidth = 60;
+    function topYof(i){ return topY - i * stepY; }
+    function zStart(i){ return i * stepZ; }
+
+    for (var i = 0; i < terraceCount; i++) {
+        var ty = topYof(i), zs = zStart(i), zc = zs + stepZ / 2;
+        var platGeo = new THREE.BoxGeometry(halfWidth * 2, thickness, stepZ);
+        var info = i === 0
+            ? { t: 'Zona 1 · La Cima', d: 'Cota más alta: reservorio, caseta de control, energía y conectividad, con línea de vista libre.' }
+            : { t: 'Zona 3 · Terraza ' + i, d: 'Franja horizontal con tubería secundaria, granadillas en espaldera y microaspersores.' };
+        var plat = addMesh(platGeo, i === 0 ? 0x9fc46b : 0x97c459, 0, ty - thickness / 2, zc, { info: info });
+        terrainMeshes.push(plat);
+        
+        if (i < terraceCount - 1) {
+            var ty2 = topYof(i + 1);
+            var riserGeo = new THREE.BoxGeometry(halfWidth * 2, stepY, 4);
+            var riser = addMesh(riserGeo, 0x8a6d4a, 0, (ty + ty2) / 2, zStart(i + 1));
+            terrainMeshes.push(riser);
+        }
+    }
+
+    var ty0 = topYof(0);
+    var reservoir = addMesh(new THREE.CylinderGeometry(10, 10, 14, 20), 0x378ADD, -30, ty0 + 7, 16,
+        { info: { t: 'Reservorio de agua', d: 'Tanque matriz en la cota más alta; alimenta el sistema por gravedad extrema.' } });
+    hydroMeshes.push(reservoir);
+
+    var shed = addMesh(new THREE.BoxGeometry(14, 10, 12), 0x888780, 2, ty0 + 5, 16,
+        { info: { t: 'Caseta de control', d: 'Gabinete hermético con controlador MPPT, batería de gel, microcontrolador y relé optoacoplado.' } });
+    elecMeshes.push(shed);
+
+    for (var p = 0; p < 3; p++) {
+        var panel = addMesh(new THREE.BoxGeometry(10, 1, 14), 0xBA7517, 24 + p * 12, ty0 + 6, 14, { rotX: -0.35,
+            info: { t: 'Paneles Solares', d: 'Fotovoltaicos de 400W orientados al norte; mantienen el sistema 100% autónomo.' } });
+        elecMeshes.push(panel);
+    }
+
+    var mast = addMesh(new THREE.CylinderGeometry(0.8, 0.8, 30, 10), 0x5f5e5a, 0, ty0 + 15, 30,
+        { info: { t: 'Mástil de conectividad', d: 'Sostiene la antena Starlink hacia el cielo y el gateway LoRaWAN apuntando al cultivo.' } });
+    elecMeshes.push(mast);
+
+    var dish = addMesh(new THREE.CylinderGeometry(4, 4, 1, 16), 0xffffff, 0, ty0 + 31, 30, { rotX: 0.5,
+        info: { t: 'Antena Starlink', d: 'Apunta al cielo; conecta el Gateway LoRaWAN a los servidores de AWS.' } });
+    dataMeshes.push(dish);
+
+    for (var b = -1; b <= 1; b += 2) {
+        var bar = addMesh(new THREE.BoxGeometry(6, 0.8, 0.8), 0x7F77DD, b * 3, ty0 + 26, 30,
+            { info: { t: 'Gateway LoRaWAN', d: 'Recibe las lecturas de humedad de los sensores IoT ubicados en las terrazas inferiores.' } });
+        dataMeshes.push(bar);
+    }
+
+    var pipePoints = [];
+    for (var t = 0; t < terraceCount; t++) {
+        var yy = topYof(t) + 3;
+        pipePoints.push(new THREE.Vector3(0, yy, zStart(t) + 4));
+        pipePoints.push(new THREE.Vector3(0, yy, zStart(t) + stepZ - 4));
+    }
+    var curve = new THREE.CatmullRomCurve3(pipePoints);
+    var tubeGeo = new THREE.TubeGeometry(curve, 80, 1.6, 8, false);
+    var mainPipe = addMesh(tubeGeo, 0x185fa5, 0, 0, 0,
+        { info: { t: 'Tubería Matriz', d: 'Baja por el eje central de la pendiente. El agua viaja con alta presión por efecto de la gravedad.' } });
+    hydroMeshes.push(mainPipe);
+
+    var cropTerraces = [1, 2, 3, 4, 5];
+    cropTerraces.forEach(function(i){
+        var ty = topYof(i), zc = zStart(i) + stepZ / 2;
+        var lateral = addMesh(new THREE.CylinderGeometry(1, 1, 100, 10), 0x85b7eb, 0, ty + 3, zc, { rotZ: Math.PI / 2,
+            info: { t: 'Tubería Secundaria', d: 'Se ramifica de la matriz y recorre la hilera de plantas de granadilla horizontalmente.' } });
+        hydroMeshes.push(lateral);
+        
+        var valve = addMesh(new THREE.BoxGeometry(4, 4, 4), 0xD85A30, -46, ty + 3, zc - 8,
+            { info: { t: 'Válvula Reductora de Presión', d: 'Vital para terrenos empinados. Evita que la presión reviente los aspersores.' } });
+        hydroMeshes.push(valve);
+        
+        [-40, -20, 0, 20, 40].forEach(function(x){
+            var spr = addMesh(new THREE.SphereGeometry(1.5, 8, 8), 0x378ADD, x, ty + 3, zc,
+                { info: { t: 'Aspersor', d: 'Riega el sector de granadillas. El sistema decide cuándo abrir la válvula basado en los sensores.' } });
+            hydroMeshes.push(spr);
+        });
+        
+        [-45, -27, -9, 9, 27, 45].forEach(function(x){
+            var plant = addMesh(new THREE.ConeGeometry(2.6, 8, 6), 0x3b6d11, x, ty + thickness / 2 + 4, zc + 10,
+                { info: { t: 'Cultivo de Granadilla', d: 'Distribución en espalderas adaptadas a las terrazas para minimizar la erosión del suelo.' } });
+            terrainMeshes.push(plant);
+        });
+    });
+
+    [1, 3, 5].forEach(function(i){
+        var ty = topYof(i), zc = zStart(i) + stepZ / 2;
+        var pole = addMesh(new THREE.CylinderGeometry(0.5, 0.5, 10, 8), 0x5f5e5a, 52, ty + 8, zc - 10);
+        var head = addMesh(new THREE.SphereGeometry(2, 10, 10), 0xEF9F27, 52, ty + 13, zc - 10,
+            { info: { t: 'Sensor Edafoclimático IoT', d: 'Sonda que mide humedad y NPK del suelo. Emite las variables por radiofrecuencia (LoRa).' } });
+        dataMeshes.push(pole);
+        dataMeshes.push(head);
+    });
+
+    function setHighlight(name){
+        var groups = { hydro: hydroMeshes, elec: elecMeshes, data: dataMeshes };
+        Object.keys(groups).forEach(function(k){
+            groups[k].forEach(function(m){
+                m.material.opacity = (name === 'all' || k === name) ? 1 : 0.15;
+            });
+        });
+        terrainMeshes.forEach(function(m){ m.material.opacity = name === 'all' ? 1 : 0.35; });
+    }
+    
+    document.getElementById('btn-all').onclick = function(){ setHighlight('all'); };
+    document.getElementById('btn-hydro').onclick = function(){ setHighlight('hydro'); };
+    document.getElementById('btn-elec').onclick = function(){ setHighlight('elec'); };
+    document.getElementById('btn-data').onclick = function(){ setHighlight('data'); };
+
+    var dragging = false, moved = false, lastX = 0, lastY = 0, autoRotate = true;
+    canvas.addEventListener('pointerdown', function(e){
+        dragging = true; moved = false; autoRotate = false; lastX = e.clientX; lastY = e.clientY; canvas.style.cursor = 'grabbing';
+    });
+    window.addEventListener('pointermove', function(e){
+        if (!dragging) return;
+        var dx = e.clientX - lastX, dy = e.clientY - lastY;
+        if (Math.abs(dx) + Math.abs(dy) > 3) moved = true;
+        theta -= dx * 0.008; phi -= dy * 0.008;
+        phi = Math.max(0.35, Math.min(1.5, phi));
+        lastX = e.clientX; lastY = e.clientY;
+        updateCamera();
+    });
+    window.addEventListener('pointerup', function(e){
+        if (dragging && !moved) handlePick(e);
+        dragging = false; canvas.style.cursor = 'grab';
+    });
+    canvas.addEventListener('wheel', function(e){
+        e.preventDefault();
+        radius += e.deltaY * 0.15;
+        radius = Math.max(90, Math.min(420, radius));
+        updateCamera();
+    }, { passive: false });
+
+    var raycaster = new THREE.Raycaster();
+    var mouse = new THREE.Vector2();
+    
+    function handlePick(e){
+        var rect = canvas.getBoundingClientRect();
+        mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+        mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+        raycaster.setFromCamera(mouse, camera);
+        var hits = raycaster.intersectObjects(scene.children, false);
+        for (var h = 0; h < hits.length; h++) {
+            var obj = hits[h].object;
+            if (obj.userData && obj.userData.info) {
+                infoTitle.textContent = obj.userData.info.t;
+                infoDesc.textContent = obj.userData.info.d;
+                infoPanel.style.display = 'block';
+                return;
+            }
+        }
+    }
+
+    function onResize(){
+        var w = wrap.clientWidth || window.innerWidth;
+        camera.aspect = w / height;
+        camera.updateProjectionMatrix();
+        renderer.setSize(w, height);
+    }
+    window.addEventListener('resize', onResize);
+
+    function animate(){
+        requestAnimationFrame(animate);
+        if (autoRotate) { theta += 0.002; updateCamera(); }
+        renderer.render(scene, camera);
+    }
+    animate();
+})();
+</script>
+</body>
+</html>
