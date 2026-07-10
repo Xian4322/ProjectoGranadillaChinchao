@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simulador 3D - Riego Chinchao</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css">
+    <style>
+        :root {
+            --surface-1: #1e1e1e;
+            --surface-2: rgba(42, 42, 42, 0.9);
+            --border: #444;
+            --text-primary: #fff;
+            --text-secondary: #ccc;
+            --text-muted: #888;
+            --radius: 8px;
+        }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #121212;
+            color: var(--text-primary);
+            padding: 20px;
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .container {
+            width: 100%;
+            max-width: 950px;
+        }
+        button {
+            background: #333;
+            color: white;
+            border: 1px solid #555;
+            padding: 8px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            transition: 0.2s;
+        }
+        button:hover {
+            background: #444;
+            border-color: #777;
+        }
+        #btn-all { background: #2563eb; border-color: #1d4ed8; }
+        #btn-all:hover { background: #1d4ed8; }
+        #btn-bom { background: #d97706; border-color: #b45309; width: 100%; justify-content: center; margin-top: 10px; font-weight: bold; }
+        #btn-bom:hover { background: #b45309; }
+
+        /* Estilos del Modal BOM */
+        #bom-modal {
+            display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            width: 90%; max-width: 800px; background: var(--surface-1); border: 1px solid var(--border);
+            border-radius: 12px; padding: 20px; z-index: 1000; box-shadow: 0 15px 40px rgba(0,0,0,0.8);
+            max-height: 80vh; overflow-y: auto;
+        }
+        .bom-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border); padding-bottom: 10px; margin-bottom: 15px; }
+        .bom-header h3 { margin: 0; color: #38bdf8; }
+        table { width: 100%; border-collapse: collapse; font-size: 13px; text-align: left; }
+        th, td { padding: 10px; border-bottom: 1px solid #333; }
+        th { background: #2a2a2a; color: #fff; }
+        td { color: #ccc; }
+        
+        #modal-overlay {
+            display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.7); z-index: 999;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2 class="sr-only" style="position:absolute;width:1px;height:1px;overflow:hidden;">Simulador 3D - 1 Hectárea (100x100m), 500 Plantas, Terreno a 60°</h2>
+    
+    <div style="display:flex;flex-wrap:wrap;gap:8px;margin:0 0 12px;">
+        <button id="btn-all">Vista completa</button>
+        <button id="btn-hydro"><i class="ti ti-droplet" aria-hidden="true" style="margin-right:4px"></i>Red hidráulica</button>
+        <button id="btn-elec"><i class="ti ti-bolt" aria-hidden="true" style="margin-right:4px"></i>Red eléctrica</button>
+        <button id="btn-data"><i class="ti ti-antenna-bars-5" aria-hidden="true" style="margin-right:4px"></i>Red de datos</button>
+    </div>
+    
+    <div id="scene-wrap" style="position:relative;width:100%;height:550px;border-radius:12px;overflow:hidden;background:var(--surface-1);border:0.5px solid var(--border);">
+        <canvas id="sim-canvas" style="display:block;width:100%;height:100%;cursor:crosshair;"></canvas>
+        
+        <div id="info-panel" style="position:absolute;top:12px;left:12px;width:280px;background:var(--surface-2);backdrop-filter: blur(8px);border:1px solid var(--border);border-radius:var(--radius);padding:15px;display:none;box-shadow: 0 4px 12px rgba(0,0,0,0.5);">
+            <p id="info-title" style="font-weight:bold;font-size:16px;color:#38bdf8;margin:0 0 8px;"></p>
+            <p id="info-desc" style="margin:0 0 10px;font-size:13px;color:var(--text-secondary);line-height:1.4;"></p>
+            <p id="info-dim" style="margin:0;font-size:12px;color:#4ade80;font-family:monospace;background:#0f172a;padding:6px;border-radius:4px; border: 1px solid #1e293b;"></p>
+        </div>
+        
+        <div style="position:absolute;bottom:10px;right:12px;font-size:12px;color:var(--text-muted); background: rgba(0,0,0,0.6); padding: 4px 8px; border-radius: 4px;">
+            arrastra para rotar · rueda para zoom · CLIC para info
+        </div>
+    </div>
+    
+    <button id="btn-bom" onclick="toggleModal()"><i class="ti ti-list" aria-hidden="true" style="margin-right:6px"></i> Ver Cuadro de Componentes (BOM)</button>
+
+    <div style="display:flex;gap:16px;flex-wrap:wrap;margin-top:12px;font-size:13px;color:var(--text-secondary);">
+        <span style="display:flex; align-items:center;"><span style="display:inline-block;width:12px;height:12px;background:#185fa5;border-radius:3px;margin-right:6px;"></span>Hidráulica</span>
+        <span style="display:flex; align-items:center;"><span style="display:inline-block;width:12px;height:12px;background:#BA7517;border-radius:3px;margin-right:6px;"></span>Eléctrica</span>
+        <span style="display:flex; align-items:center;"><span style="display:inline-block;width:12px;height:12px;background:#7F77DD;border-radius:3px;margin-right:6px;"></span>Datos (IoT)</span>
+        <span style="display:flex; align-items:center;"><span style="display:inline-block;width:12px;height:12px;background:#9fc46b;border-radius:3px;margin-right:6px;"></span>Cultivo (500)</span>
+    </div>
+</div>
+
+<div id="modal-overlay" onclick="toggleModal()"></div>
+<div id="bom-modal">
+    <div class="bom-header">
+        <h3>Lista de Materiales (BOM) - 1 Hectárea / Pendiente 60°</h3>
+        <button onclick="toggleModal()" style="background:#dc2626;border:none;">Cerrar</button>
+    </div>
+    <table>
+        <thead><tr><th>Sistema</th><th>Componente</th><th>Cantidad</th><th>Dimensión / Capacidad</th></tr></thead>
+        <tbody>
+            <tr><td>Agronómico</td><td>Plantas Granadilla (Espalderas)</td><td>500 uds</td><td>Espaciado de 2m x 10m por terraza</td></tr>
+            <tr><td>Agronómico</td><td>Área Neta del Terreno</td><td>1 Hectárea</td><td>100m ancho x 100m profundidad</td></tr>
+            <tr><td>Hidráulico</td><td>Reservorio de Agua Cota Alta</td><td>1 ud</td><td>5,000 Litros de Polietileno</td></tr>
+            <tr><td>Hidráulico</td><td>Tubería Matriz por Gravedad</td><td>100 m</td><td>PVC Ø 32 mm, soporta alta presión</td></tr>
+            <tr><td>Hidráulico</td><td>Tubería Secundaria Lateral</td><td>1,000 m</td><td>PVC Ø 16 mm (100m por cada 10 terrazas)</td></tr>
+            <tr><td>Hidráulico</td><td>Válvulas Reductoras Presión</td><td>10 uds</td><td>Ajuste 1.5 a 3.0 bar</td></tr>
+            <tr><td>Eléctrico</td><td>Paneles Solares Fotovoltaicos</td><td>3 uds</td><td>400W c/u, Inclinación Norte</td></tr>
+            <tr><td>Eléctrico</td><td>Cableado Energía VCC</td><td>1 Lote</td><td>AWG 10 Solar, Doble chaqueta</td></tr>
+            <tr><td>Datos/IoT</td><td>Gateway LoRaWAN (Central)</td><td>1 ud</td><td>Cobertura > 2km, PoE</td></tr>
+            <tr><td>Datos/IoT</td><td>Sensor Suelo Multicota</td><td>5 uds</td><td>Sondas NPK y Humedad, Batería 3 años</td></tr>
+        </tbody>
+    </table>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+
+<script>
+function toggleModal() {
+    var modal = document.getElementById('bom-modal');
+    var overlay = document.getElementById('modal-overlay');
+    if(modal.style.display === 'block') {
+        modal.style.display = 'none';
+        overlay.style.display = 'none';
+    } else {
+        modal.style.display = 'block';
+        overlay.style.display = 'block';
+    }
+}
+
+(function(){
+    var wrap = document.getElementById('scene-wrap');
+    var canvas = document.getElementById('sim-canvas');
+    var infoPanel = document.getElementById('info-panel');
+    var infoTitle = document.getElementById('info-title');
+    var infoDesc = document.getElementById('info-desc');
+    var infoDim = document.getElementById('info-dim');
+
+    var scene = new THREE.Scene();
+    var width = wrap.clientWidth || window.innerWidth;
+    var height = wrap.clientHeight || 550;
+    
+    var camera = new THREE.PerspectiveCamera(45, width / height, 1, 2000);
+    var renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true, alpha: true });
+    
+    renderer.setClearColor(0x000000, 0);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    renderer.setSize(width, height);
+
+    scene.add(new THREE.AmbientLight(0xffffff, 0.75));
+    var dl = new THREE.DirectionalLight(0xffffff, 0.75);
+    dl.position.set(120, 200, 100);
+    scene.add(dl);
+
+    // Ajustamos la cámara para ver todo el cerro (170m de altura simulada)
+    var target = new THREE.Vector3(0, 80, 50);
+    var radius = 320, theta = 0.65, phi = 1.05;
+    
+    function updateCamera(){
+        camera.position.x = target.x + radius * Math.sin(phi) * Math.sin(theta);
+        camera.position.y = target.y + radius * Math.cos(phi);
+        camera.position.z = target.z + radius * Math.sin(phi) * Math.cos(theta);
+        camera.lookAt(target);
+    }
+    updateCamera();
+
+    var hydroMeshes = [], elecMeshes = [], dataMeshes = [], terrainMeshes = [];
+
+    // Función para crear objetos y añadir userData
+    function addMesh(geo, color, x, y, z, opts){
+        opts = opts || {};
+        var mat = new THREE.MeshStandardMaterial({ color: color, roughness: 0.75, metalness: 0.05, transparent: true, opacity: 1 });
+        var mesh = new THREE.Mesh(geo, mat);
+        mesh.position.set(x, y, z);
+        if (opts.rotX) mesh.rotation.x = opts.rotX;
+        if (opts.rotY) mesh.rotation.y = opts.rotY;
+        if (opts.rotZ) mesh.rotation.z = opts.rotZ;
+        if (opts.info) mesh.userData.info = opts.info;
+        scene.add(mesh);
+        return mesh;
+    }
+
+    // --- CONFIGURACIÓN DE 1 HECTÁREA (100x100m) CON PENDIENTE EXTREMA ---
+    // 10 terrazas. Profundidad total: 100m (10x10m). Ancho: 100m (-50 a 50).
+    var terraceCount = 10, stepZ = 10; 
+    var stepY = 17.3; // Relación aprox para 60° de pendiente (tan(60) * 10 = 17.3)
+    var topY = 173;   // Altura total del cerro
+    var thickness = 6, halfWidth = 50;
+
+    function topYof(i){ return topY - i * stepY; }
+    function zStart(i){ return i * stepZ; }
+
+    for (var i = 0; i < terraceCount; i++) {
+        var ty = topYof(i), zs = zStart(i), zc = zs + stepZ / 2;
+        
+        var platGeo = new THREE.BoxGeometry(halfWidth * 2, thickness, stepZ);
+        var info = i === 0
+            ? { t: 'Cota Cero (La Cima)', d: 'Superficie de infraestructura pesada. Aislada de riesgo de deslizamiento.', dim: 'Área Neta: 1000m² | Altitud: +170m rel.' }
+            : { t: 'Terraza Agrícola ' + i, d: 'Franja estabilizada para cultivo, mitiga la erosión hídrica de los 60°.', dim: 'Largo: 100m | Ancho: 10m' };
+        
+        var plat = addMesh(platGeo, i === 0 ? 0x9fc46b : 0x97c459, 0, ty - thickness / 2, zc, { info: info });
+        terrainMeshes.push(plat);
+        
+        // Muros de contención del cerro
+        if (i < terraceCount - 1) {
+            var ty2 = topYof(i + 1);
+            var riserGeo = new THREE.BoxGeometry(halfWidth * 2, stepY, 2);
+            var riser = addMesh(riserGeo, 0x8a6d4a, 0, (ty + ty2) / 2, zStart(i + 1));
+            terrainMeshes.push(riser);
+        }
+    }
+
+    var ty0 = topYof(0);
+    
+    // INFRAESTRUCTURA CIMA
+    var reservoir = addMesh(new THREE.CylinderGeometry(8, 8, 12, 20), 0x378ADD, -30, ty0 + 6, 5,
+        { info: { t: 'Reservorio de Gravedad', d: 'Alimenta toda la hectárea. El gran desnivel presuriza el agua sin necesidad de bombas de descarga.', dim: 'Volumen: 5,000 Litros (Polietileno)' } });
+    hydroMeshes.push(reservoir);
+
+    var shed = addMesh(new THREE.BoxGeometry(10, 8, 8), 0x888780, -10, ty0 + 4, 5,
+        { info: { t: 'Centro de Control (Caseta)', d: 'Corazón eléctrico. Aloja controlador MPPT, banco de baterías e Inversor a salvo de la intemperie.', dim: 'Largo: 2.5m | Alto: 2m' } });
+    elecMeshes.push(shed);
+
+    for (var p = 0; p < 3; p++) {
+        var panel = addMesh(new THREE.BoxGeometry(7, 0.5, 10), 0xBA7517, 10 + p * 10, ty0 + 4, 4, { rotX: -0.4,
+            info: { t: 'Módulo Fotovoltaico', d: 'Convierte radiación en energía VCC.', dim: 'Capacidad: 400W | Área: 2.2 m²' } });
+        elecMeshes.push(panel);
+    }
+
+    // Antenas
+    var mast = addMesh(new THREE.CylinderGeometry(0.5, 0.5, 20, 10), 0x5f5e5a, -15, ty0 + 10, 5,
+        { info: { t: 'Mástil de Comunicaciones', d: 'Soporte físico para los radios y antenas satelitales.', dim: 'Altura: 4m | Material: Fierro Galvanizado' } });
+    elecMeshes.push(mast);
+
+    var dish = addMesh(new THREE.BoxGeometry(4, 0.5, 4), 0xffffff, -15, ty0 + 20, 5, { rotX: 0.3,
+        info: { t: 'Antena Starlink', d: 'Provee internet de banda ancha satelital. Esencial en Chinchao por falta de cobertura 4G.', dim: 'Consumo: ~50W a 75W continuos' } });
+    dataMeshes.push(dish);
+
+    var bar = addMesh(new THREE.BoxGeometry(1, 4, 1), 0x7F77DD, -15, ty0 + 15, 6,
+        { info: { t: 'Gateway LoRaWAN', d: 'Concentrador de radio que escucha a todos los sensores del cultivo.', dim: 'Frecuencia: 915 MHz | Alcance: >2 km' } });
+    dataMeshes.push(bar);
+
+    // TUBERÍAS
+    var pipePoints = [];
+    for (var t = 0; t < terraceCount; t++) {
+        var yy = topYof(t) + 1;
+        pipePoints.push(new THREE.Vector3(0, yy, zStart(t) + 2));
+        pipePoints.push(new THREE.Vector3(0, yy, zStart(t) + stepZ - 2));
+    }
+    var curve = new THREE.CatmullRomCurve3(pipePoints);
+    var mainPipe = addMesh(new THREE.TubeGeometry(curve, 100, 1.2, 8, false), 0x185fa5, 0, 0, 0,
+        { info: { t: 'Tubería Matriz Matriz', d: 'Baja 100 metros acumulando enorme presión gravitacional por la pendiente de 60°.', dim: 'Longitud: 100m | Diámetro: 32mm (1")' } });
+    hydroMeshes.push(mainPipe);
+
+    // Cable Eléctrico/Datos acompañando tubería
+    var cableLine = addMesh(new THREE.TubeGeometry(curve, 100, 0.3, 4, false), 0xBA7517, 1.5, 0, 0,
+        { info: { t: 'Línea Eléctrica de Control', d: 'Cable VCC que baja a las electroválvulas para activarlas desde el relé de la caseta.', dim: 'Cable AWG 14 (Señal y Tierra)' } });
+    elecMeshes.push(cableLine);
+
+    // 500 PLANTAS & TERRAZAS (10 terrazas x 50 plantas = 500)
+    var plantGeo = new THREE.ConeGeometry(1.2, 4, 6);
+    
+    for (var t = 1; t < terraceCount; t++) {
+        var ty = topYof(t), zc = zStart(t) + stepZ / 2;
+        
+        // Línea lateral hidráulica
+        var lateral = addMesh(new THREE.CylinderGeometry(0.6, 0.6, 100, 10), 0x85b7eb, 0, ty + 1, zc, { rotZ: Math.PI / 2,
+            info: { t: 'Línea de Riego Secundaria', d: 'Se ramifica para regar esta cota de altitud específica.', dim: 'Longitud: 100m | Diámetro: 16mm (1/2")' } });
+        hydroMeshes.push(lateral);
+        
+        // Válvula Reguladora (Una por terraza)
+        var valve = addMesh(new THREE.BoxGeometry(3, 3, 3), 0xD85A30, -3, ty + 1, zc,
+            { info: { t: 'Válvula Reductora (PRV)', d: 'Disipa la energía de la caída de 60° para evitar que el aspersor estalle.', dim: 'Presión de Salida: Ajustada a 2 Bar' } });
+        hydroMeshes.push(valve);
+
+        // Nodos Sensores (Intercalados, 5 en total)
+        if (t % 2 !== 0) {
+            var pole = addMesh(new THREE.CylinderGeometry(0.3, 0.3, 6, 8), 0x5f5e5a, 40, ty + 4, zc);
+            var head = addMesh(new THREE.BoxGeometry(2, 2, 2), 0xEF9F27, 40, ty + 7, zc,
+                { info: { t: 'Nodo IoT Edafoclimático', d: 'Sonda enterrada para mapear si el agua resbala por la pendiente o se absorbe.', dim: 'Lectura: N-P-K, Humedad de 0-100%' } });
+            dataMeshes.push(pole);
+            dataMeshes.push(head);
+        }
+
+        // 50 PLANTAS POR TERRAZA
+        // Recorren X desde -49 hasta 49 (distancia de 100m total). 50 plantas implican separaciones de 2m.
+        for(var px=0; px < 50; px++) {
+            var posX = -49 + (px * 2);
+            var plant = addMesh(plantGeo, 0x3b6d11, posX, ty + thickness / 2 + 2, zc + 1,
+                { info: { t: 'Espaldera de Granadilla ('+((t-1)*50 + px + 1)+'/500)', d: 'Planta controlada. Las raíces en pendiente de 60° son muy susceptibles al estrés hídrico.', dim: 'Distancia a la siguiente planta: 2 metros' } });
+            terrainMeshes.push(plant);
+        }
+    }
+
+    // Filtros de Vista
+    function setHighlight(name){
+        var groups = { hydro: hydroMeshes, elec: elecMeshes, data: dataMeshes };
+        Object.keys(groups).forEach(function(k){
+            groups[k].forEach(function(m){
+                m.material.opacity = (name === 'all' || k === name) ? 1 : 0.15;
+            });
+        });
+        terrainMeshes.forEach(function(m){ m.material.opacity = name === 'all' ? 1 : 0.4; });
+    }
+    
+    document.getElementById('btn-all').onclick = function(){ setHighlight('all'); };
+    document.getElementById('btn-hydro').onclick = function(){ setHighlight('hydro'); };
+    document.getElementById('btn-elec').onclick = function(){ setHighlight('elec'); };
+    document.getElementById('btn-data').onclick = function(){ setHighlight('data'); };
+
+    // Controles de Cámara (Arrastrar)
+    var dragging = false, moved = false, lastX = 0, lastY = 0;
+    canvas.addEventListener('pointerdown', function(e){
+        dragging = true; moved = false; lastX = e.clientX; lastY = e.clientY; 
+        canvas.style.cursor = 'grabbing';
+    });
+    window.addEventListener('pointermove', function(e){
+        if (!dragging) return;
+        var dx = e.clientX - lastX, dy = e.clientY - lastY;
+        if (Math.abs(dx) + Math.abs(dy) > 3) moved = true;
+        theta -= dx * 0.008; phi -= dy * 0.008;
+        phi = Math.max(0.35, Math.min(1.6, phi));
+        lastX = e.clientX; lastY = e.clientY;
+        updateCamera();
+    });
+    window.addEventListener('pointerup', function(e){
+        if (dragging && !moved) handlePick(e);
+        dragging = false; canvas.style.cursor = 'crosshair';
+    });
+    canvas.addEventListener('wheel', function(e){
+        e.preventDefault();
+        radius += e.deltaY * 0.2;
+        radius = Math.max(100, Math.min(550, radius));
+        updateCamera();
+    }, { passive: false });
+
+    // Raycaster (Clic para información)
+    var raycaster = new THREE.Raycaster();
+    var mouse = new THREE.Vector2();
+    
+    function handlePick(e){
+        var rect = canvas.getBoundingClientRect();
+        mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+        mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+        
+        raycaster.setFromCamera(mouse, camera);
+        var hits = raycaster.intersectObjects(scene.children, false);
+        
+        for (var h = 0; h < hits.length; h++) {
+            var obj = hits[h].object;
+            if (obj.userData && obj.userData.info) {
+                infoTitle.textContent = obj.userData.info.t;
+                infoDesc.textContent = obj.userData.info.d;
+                infoDim.textContent = obj.userData.info.dim;
+                infoPanel.style.display = 'block';
+                return;
+            }
+        }
+        infoPanel.style.display = 'none'; // Ocultar si hace clic en vacío
+    }
+
+    // Responsive
+    window.addEventListener('resize', function(){
+        var w = wrap.clientWidth || window.innerWidth;
+        camera.aspect = w / height;
+        camera.updateProjectionMatrix();
+        renderer.setSize(w, height);
+    });
+
+    // Render loop
+    function animate(){
+        requestAnimationFrame(animate);
+        renderer.render(scene, camera);
+    }
+    animate();
+})();
+</script>
+</body>
+</html>
