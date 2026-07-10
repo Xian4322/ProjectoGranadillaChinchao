@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Diagrama de Bloques Funcional - GranaSmart</title>
+    <style>
+        :root {
+            --bg-color: #0f172a;
+            --panel-bg: rgba(30, 41, 59, 0.8);
+            --border-color: #334155;
+            --text-main: #e2e8f0;
+            --text-muted: #94a3b8;
+            
+            --c-power: #f59e0b;
+            --c-data: #3b82f6;
+            --c-control: #10b981;
+            --c-action: #ef4444;
+            --c-cloud: #8b5cf6;
+        }
+
+        body {
+            margin: 0; font-family: 'Segoe UI', system-ui, sans-serif;
+            background-color: var(--bg-color); color: var(--text-main);
+            display: flex; flex-direction: column; align-items: center; padding: 20px;
+        }
+
+        .header { text-align: center; margin-bottom: 20px; }
+        .header h1 { color: #38bdf8; margin: 0 0 5px 0; }
+        
+        .diagram-container {
+            position: relative; width: 1000px; height: 600px;
+            background: var(--panel-bg); border: 1px solid var(--border-color);
+            border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            overflow: hidden;
+        }
+
+        /* Capa SVG para las flechas de conexión */
+        #svg-layer {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; pointer-events: none;
+        }
+
+        .path-line {
+            fill: none; stroke-width: 3; stroke-linecap: round;
+            transition: all 0.3s;
+        }
+        
+        /* Animaciones para las flechas */
+        .flow-data { stroke-dasharray: 8; animation: dash-flow 1s linear infinite; }
+        .flow-power { stroke-dasharray: 12; animation: dash-flow 1.5s linear infinite reverse; }
+        .flow-feedback { stroke-dasharray: 5; animation: dash-flow 0.8s linear infinite; }
+
+        @keyframes dash-flow { to { stroke-dashoffset: -24; } }
+
+        /* Nodos (Bloques del diagrama) */
+        .node {
+            position: absolute; z-index: 10; width: 180px; padding: 15px;
+            background: #1e293b; border: 2px solid; border-radius: 10px;
+            text-align: center; cursor: pointer; transition: 0.3s;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+        }
+
+        .node:hover { transform: translateY(-5px); box-shadow: 0 8px 25px rgba(0,0,0,0.5); filter: brightness(1.2); }
+
+        .n-title { font-weight: bold; font-size: 1.1rem; margin-bottom: 5px; }
+        .n-sub { font-size: 0.75rem; color: var(--text-muted); }
+        .n-icon { font-size: 2rem; margin-bottom: 10px; }
+
+        /* Posiciones y colores de los nodos */
+        #n-telemetry { top: 40px; left: 410px; border-color: var(--c-cloud); }
+        #n-sensors { top: 250px; left: 60px; border-color: var(--c-data); }
+        #n-control { top: 250px; left: 410px; border-color: var(--c-control); }
+        #n-actuators { top: 250px; left: 760px; border-color: var(--c-action); }
+        #n-power { bottom: 40px; left: 410px; border-color: var(--c-power); }
+        #n-plant { top: 450px; left: 760px; border-color: #22c55e; border-style: dashed; }
+
+        /* Panel de Información Inferior */
+        .info-panel {
+            width: 960px; margin-top: 20px; padding: 20px;
+            background: var(--panel-bg); border: 1px solid var(--border-color);
+            border-radius: 12px; display: flex; gap: 20px;
+        }
+
+        .info-text { flex: 2; }
+        .info-text h2 { margin: 0 0 10px 0; color: #38bdf8; }
+        
+        .controls { flex: 1; display: flex; flex-direction: column; justify-content: center; gap: 10px; }
+        button {
+            padding: 12px; border: none; border-radius: 8px; font-weight: bold; cursor: pointer;
+            background: #2563eb; color: white; transition: 0.3s; font-size: 1rem;
+        }
+        button:hover { background: #1d4ed8; }
+
+        /* Etiquetas en las líneas */
+        .line-label {
+            position: absolute; font-size: 0.75rem; font-weight: bold;
+            background: #0f172a; padding: 2px 6px; border-radius: 4px; border: 1px solid #334155;
+            z-index: 5;
+        }
+
+    </style>
+</head>
+<body>
+
+    <div class="header">
+        <h1>Arquitectura Funcional y Lazo de Control</h1>
+        <p>Diagrama de Bloques: Interacción de Información, Energía y Materia</p>
+    </div>
+
+    <div class="diagram-container">
+        
+        <svg id="svg-layer">
+            <defs>
+                <marker id="arrow-data" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                    <path d="M 0 0 L 10 5 L 0 10 z" fill="#3b82f6" />
+                </marker>
+                <marker id="arrow-ctrl" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                    <path d="M 0 0 L 10 5 L 0 10 z" fill="#10b981" />
+                </marker>
+                <marker id="arrow-pwr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+                    <path d="M 0 0 L 10 5 L 0 10 z" fill="#f59e0b" />
+                </marker>
+                <marker id="arrow-fb" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+                    <path d="M 0 0 L 10 5 L 0 10 z" fill="#22c55e" />
+                </marker>
+            </defs>
+
+            <path id="l-pwr-ctrl" class="path-line flow-power" stroke="#f59e0b" d="M 500 420 L 500 365" marker-end="url(#arrow-pwr)" />
+            <path id="l-pwr-sens" class="path-line flow-power" stroke="#f59e0b" d="M 410 490 L 150 490 L 150 365" marker-end="url(#arrow-pwr)" />
+            <path id="l-pwr-act" class="path-line flow-power" stroke="#f59e0b" d="M 590 490 L 850 490 L 850 365" marker-end="url(#arrow-pwr)" />
+
+            <path id="l-sens-ctrl" class="path-line" stroke="#3b82f6" d="M 240 300 L 410 300" marker-end="url(#arrow-data)" />
+            <path id="l-ctrl-act" class="path-line" stroke="#10b981" d="M 590 300 L 760 300" marker-end="url(#arrow-ctrl)" />
+            <path id="l-ctrl-tele" class="path-line" stroke="#8b5cf6" d="M 500 250 L 500 155" marker-end="url(#arrow-data)" marker-start="url(#arrow-data)" />
+
+            <path id="l-act-plant" class="path-line" stroke="#ef4444" d="M 850 365 L 850 450" marker-end="url(#arrow-ctrl)" />
+
+            <path id="l-feedback" class="path-line" stroke="#22c55e" stroke-dasharray="5,5" d="M 760 500 L 150 500 L 150 365" marker-end="url(#arrow-fb)" opacity="0.3" />
+        </svg>
+
+        <div class="line-label" style="top: 275px; left: 280px; color: #38bdf8;">Señal Analógica</div>
+        <div class="line-label" style="top: 275px; left: 630px; color: #10b981;">Orden Lógica (3.3V)</div>
+        <div class="line-label" style="top: 190px; left: 510px; color: #a78bfa;">LoRa / API REST</div>
+        <div class="line-label" style="top: 390px; left: 860px; color: #f87171;">Flujo de Agua</div>
+        <div class="line-label" id="lbl-feedback" style="top: 510px; left: 420px; color: #22c55e; opacity: 0.3;">Retroalimentación Física (Cambio en Humedad)</div>
+
+        <div class="node" id="n-telemetry" onclick="showInfo('telemetry')">
+            <div class="n-icon">☁️</div>
+            <div class="n-title">Nivel 5: Nube</div>
+            <div class="n-sub">Gateway, Starlink, App</div>
+        </div>
+
+        <div class="node" id="n-sensors" onclick="showInfo('sensors')">
+            <div class="n-icon">🌡️</div>
+            <div class="n-title">Nivel 2: Sensado</div>
+            <div class="n-sub">Suelo, Clima, Lluvia</div>
+        </div>
+
+        <div class="node" id="n-control" onclick="showInfo('control')">
+            <div class="n-icon">🧠</div>
+            <div class="n-title">Nivel 3: Controlador</div>
+            <div class="n-sub">Microcontrolador IoT</div>
+        </div>
+
+        <div class="node" id="n-actuators" onclick="showInfo('actuators')">
+            <div class="n-icon">⚙️</div>
+            <div class="n-title">Nivel 4: Actuación</div>
+            <div class="n-sub">Relés y Electroválvulas</div>
+        </div>
+
+        <div class="node" id="n-power" onclick="showInfo('power')">
+            <div class="n-icon">⚡</div>
+            <div class="n-title">Nivel 1: Energía</div>
+            <div class="n-sub">Paneles MPPT y Batería</div>
+        </div>
+
+        <div class="node" id="n-plant" onclick="showInfo('plant')" style="background: transparent;">
+            <div class="n-icon">🌱</div>
+            <div class="n-title" style="color: #22c55e;">El Proceso</div>
+            <div class="n-sub">Cultivo de Granadilla</div>
+        </div>
+
+    </div>
+
+    <div class="info-panel">
+        <div class="info-text">
+            <h2 id="desc-title">Selecciona un bloque del diagrama</h2>
+            <p id="desc-body">Haz clic en cualquier caja superior para ver su función técnica o utiliza los botones de la derecha para simular el comportamiento del sistema industrial.</p>
+        </div>
+        <div class="controls">
+            <button onclick="animarLazoControl()">🔄 Simular Lazo Cerrado</button>
+            <button onclick="resetearVista()" style="background: #475569;">⏹️ Detener / Reiniciar</button>
+        </div>
+    </div>
+
+    <script>
+        const infoData = {
+            'telemetry': { title: 'Nivel 5: Telemetría y Supervisión', desc: 'Representa la arquitectura de red. Extrae los datos del campo mediante antenas LoRaWAN, los sube al espacio usando Starlink y los aloja en la nube (AWS) para que el operario los vea en el celular.' },
+            'sensors': { title: 'Nivel 2: Entradas (Sensado)', desc: 'Son los "ojos" del sistema. Convierten variables físicas del entorno de Chinchao (humedad en la tierra, temperatura del aire) en señales eléctricas para enviarlas al cerebro.' },
+            'control': { title: 'Nivel 3: Controlador Local (Cerebro)', desc: 'El nodo IoT recibe la data de los sensores, la compara con el Setpoint (ej. humedad deseada > 40%) y toma decisiones instantáneas sin necesitar intervención humana ni depender del internet en ese momento.' },
+            'actuators': { title: 'Nivel 4: Salidas (Actuación)', desc: 'Transforman la orden electrónica de 3.3V en fuerza física. Los relés abren las electroválvulas usando los 24V de las baterías, dejando pasar el agua y los nutrientes presurizados por las tuberías.' },
+            'power': { title: 'Nivel 1: Infraestructura Energética', desc: 'La base de operaciones. Los paneles solares y el banco de baterías alimentan constantemente a todos los demás niveles (las flechas amarillas punteadas) garantizando una operación 100% off-grid y sostenible.' },
+            'plant': { title: 'El Proceso (Planta / Sistema Físico)', desc: 'Es la variable que estamos intentando controlar: el microclima en las raíces de la granadilla. Recibe el impacto físico del Nivel 4 (agua/fertilizante).' }
+        };
+
+        function showInfo(nodeId) {
+            document.getElementById('desc-title').innerText = infoData[nodeId].title;
+            document.getElementById('desc-body').innerText = infoData[nodeId].desc;
+        }
+
+        function animarLazoControl() {
+            document.getElementById('desc-title').innerText = "Ejecutando Lazo de Control Cerrado";
+            document.getElementById('desc-body').innerText = "Observa la ruta: El Sensor detecta baja humedad (Azul) -> El Controlador procesa y envía orden (Verde oscuro) -> El Actuador abre la válvula -> El agua hidrata la planta (Rojo) -> La tierra mojada cambia la lectura física del Sensor (Verde punteado), cerrando el ciclo.";
+            
+            // Animar datos fluyendo
+            document.getElementById('l-sens-ctrl').classList.add('flow-data');
+            
+            setTimeout(() => {
+                document.getElementById('l-ctrl-act').classList.add('flow-data');
+            }, 1000);
+
+            setTimeout(() => {
+                document.getElementById('l-act-plant').classList.add('flow-data');
+            }, 2000);
+
+            // Animar retroalimentación
+            setTimeout(() => {
+                document.getElementById('l-feedback').style.opacity = '1';
+                document.getElementById('l-feedback').classList.add('flow-feedback');
+                document.getElementById('lbl-feedback').style.opacity = '1';
+            }, 3000);
+        }
+
+        function resetearVista() {
+            document.getElementById('desc-title').innerText = "Selecciona un bloque del diagrama";
+            document.getElementById('desc-body').innerText = "Haz clic en cualquier caja superior para ver su función técnica o utiliza los botones de la derecha para simular el comportamiento del sistema industrial.";
+            
+            const paths = document.querySelectorAll('.path-line');
+            paths.forEach(p => p.classList.remove('flow-data', 'flow-feedback'));
+            
+            // Mantener solo la energía fluyendo base
+            document.getElementById('l-pwr-ctrl').classList.add('flow-power');
+            document.getElementById('l-pwr-sens').classList.add('flow-power');
+            document.getElementById('l-pwr-act').classList.add('flow-power');
+
+            document.getElementById('l-feedback').style.opacity = '0.3';
+            document.getElementById('lbl-feedback').style.opacity = '0.3';
+        }
+    </script>
+</body>
+</html>

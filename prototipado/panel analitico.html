@@ -1,0 +1,516 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simulación SCADA - GranaSmart v3.0</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root {
+            --color-ok: #2ecc71;
+            --color-alert: #e74c3c;
+            --color-data: #f39c12;
+            --color-water: #3498db;
+            --color-chem: #9b59b6;
+            --color-rain: #74b9ff;
+        }
+
+        body {
+            margin: 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #0f172a;
+            color: white;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding-bottom: 30px;
+        }
+
+        .header {
+            padding: 15px;
+            text-align: center;
+            background: rgba(15, 23, 42, 0.9);
+            width: 100%;
+            border-bottom: 1px solid #334155;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+        }
+
+        .header h1 { margin: 0 0 5px 0; font-size: 1.5rem; color: #38bdf8; }
+        .header p { margin: 0; font-size: 0.9rem; color: #94a3b8; }
+
+        /* Área de Simulación */
+        .simulation-area {
+            position: relative;
+            width: 1000px;
+            height: 550px;
+            margin-top: 20px;
+            background-image: linear-gradient(rgba(15, 23, 42, 0.6), rgba(15, 23, 42, 0.8)), url('https://images.unsplash.com/photo-1595859702812-70659695b128?ixlib=rb-4.0.3&auto=format&fit=crop&w=1200&q=80');
+            background-size: cover;
+            background-position: center;
+            border-radius: 12px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.8);
+            overflow: hidden;
+            border: 1px solid #334155;
+        }
+
+        /* Lluvia Overlay */
+        .rain-overlay {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: url('https://www.transparenttextures.com/patterns/stardust.png');
+            opacity: 0;
+            transition: opacity 1s;
+            z-index: 1;
+            pointer-events: none;
+        }
+
+        .rain-active { opacity: 0.4; animation: rain-fall 0.5s linear infinite; }
+        @keyframes rain-fall { from { background-position: 0 0; } to { background-position: 10px 50px; } }
+
+        /* Glassmorphism para los Nodos */
+        .hardware-node {
+            position: absolute;
+            background: rgba(30, 41, 59, 0.75);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            padding: 12px;
+            width: 150px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+            transition: all 0.3s;
+            z-index: 10;
+        }
+
+        .node-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+            padding-bottom: 5px;
+            margin-bottom: 8px;
+        }
+
+        .hardware-icon { font-size: 1.3rem; }
+        .hardware-label { font-size: 0.8rem; font-weight: bold; color: #e2e8f0; }
+        
+        .status-dot {
+            width: 10px; height: 10px; border-radius: 50%;
+            background-color: var(--color-ok);
+            box-shadow: 0 0 8px var(--color-ok);
+        }
+
+        .node-data { font-size: 0.75rem; color: #cbd5e1; font-family: monospace; }
+        
+        .progress-bar {
+            width: 100%; height: 5px; background: #334155;
+            border-radius: 3px; margin-top: 5px; overflow: hidden;
+        }
+        .progress-fill { height: 100%; background: var(--color-ok); width: 60%; transition: 0.5s; }
+
+        /* Posiciones */
+        #solar-panel { top: 20px; left: 20px; }
+        #starlink { top: 20px; right: 20px; }
+        #gateway { top: 150px; left: 420px; }
+        #water-pump { bottom: 20px; left: 20px; width: 170px; }
+        #sensor-node { bottom: 50px; right: 180px; }
+        #plant { bottom: 20px; right: 40px; font-size: 4.5rem; text-align: center; background: none; border: none; box-shadow: none; backdrop-filter: none; }
+
+        /* Conexiones */
+        .connection {
+            position: absolute;
+            background-color: rgba(255, 255, 255, 0.15);
+            z-index: 5;
+            transition: 0.3s;
+        }
+        
+        #line-sensor-gateway { top: 210px; left: 480px; width: 4px; height: 180px; transform: rotate(-35deg); transform-origin: top left; }
+        #line-gateway-starlink { top: 90px; left: 480px; width: 330px; height: 4px; transform: rotate(-15deg); transform-origin: left top; }
+        #line-gateway-pump { top: 210px; left: 110px; width: 320px; height: 4px; transform: rotate(25deg); transform-origin: right top; }
+
+        /* Animaciones IoT */
+        @keyframes pulse-data { 50% { background-color: var(--color-data); box-shadow: 0 0 15px var(--color-data); } }
+        @keyframes pulse-water { 50% { background-color: var(--color-water); box-shadow: 0 0 15px var(--color-water); } }
+        @keyframes pulse-chem { 50% { background-color: var(--color-chem); box-shadow: 0 0 15px var(--color-chem); } }
+        @keyframes pulse-alert { 50% { background-color: var(--color-alert); box-shadow: 0 0 15px var(--color-alert); } }
+
+        .transmitting { animation: pulse-data 1s infinite; }
+        .watering { animation: pulse-water 0.5s infinite; }
+        .chem-inject { animation: pulse-chem 0.5s infinite; }
+        .alert-line { animation: pulse-alert 0.5s infinite; }
+
+        /* Controles */
+        .controls {
+            margin-top: 15px; display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; width: 1000px;
+        }
+
+        button {
+            padding: 10px 15px; font-size: 0.85rem; font-weight: bold; cursor: pointer;
+            border: none; border-radius: 6px; color: white; transition: 0.3s;
+            display: flex; align-items: center; gap: 6px;
+        }
+
+        .btn-dry { background: #ea580c; } .btn-dry:hover { background: #c2410c; }
+        .btn-rain { background: #0284c7; } .btn-rain:hover { background: #0369a1; }
+        .btn-chem { background: #7e22ce; } .btn-chem:hover { background: #6b21a8; }
+        .btn-power { background: #b91c1c; } .btn-power:hover { background: #991b1b; }
+        .btn-reset { background: #475569; } .btn-reset:hover { background: #334155; }
+
+        /* Panel Inferior: Consola + Gráfico */
+        .bottom-panel {
+            display: flex;
+            gap: 15px;
+            width: 1000px;
+            margin-top: 15px;
+            height: 220px;
+        }
+
+        .log-panel {
+            flex: 1;
+            background: rgba(15, 23, 42, 0.9);
+            color: #4ade80; font-family: 'Courier New', Courier, monospace; padding: 15px;
+            overflow-y: auto; border: 1px solid #334155; border-radius: 8px; font-size: 0.8rem;
+        }
+
+        .chart-panel {
+            flex: 1;
+            background: rgba(15, 23, 42, 0.9);
+            border: 1px solid #334155; border-radius: 8px;
+            padding: 10px;
+            position: relative;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="header">
+        <h1>Centro de Control IoT - GranaSmart SCADA</h1>
+        <p>Procesos Automatizados y Control Estadístico en Tiempo Real</p>
+    </div>
+
+    <div class="simulation-area">
+        <div class="rain-overlay" id="rain-fx"></div>
+
+        <div id="line-sensor-gateway" class="connection"></div>
+        <div id="line-gateway-starlink" class="connection"></div>
+        <div id="line-gateway-pump" class="connection"></div>
+
+        <div class="hardware-node" id="solar-panel">
+            <div class="node-header">
+                <span class="hardware-icon">☀️</span><span class="hardware-label">Energía</span>
+                <div class="status-dot" id="dot-solar"></div>
+            </div>
+            <div class="node-data">Batería: <span id="bat-val">98</span>%</div>
+            <div class="progress-bar"><div class="progress-fill" id="bat-bar" style="width: 98%;"></div></div>
+        </div>
+
+        <div class="hardware-node" id="starlink">
+            <div class="node-header">
+                <span class="hardware-icon">🛰️</span><span class="hardware-label">Starlink</span>
+                <div class="status-dot" id="dot-starlink"></div>
+            </div>
+            <div class="node-data">Uplink: <span style="color:#4ade80">OK</span></div>
+            <div class="node-data">Ping: 34ms</div>
+        </div>
+
+        <div class="hardware-node" id="gateway">
+            <div class="node-header">
+                <span class="hardware-icon">📡</span><span class="hardware-label">LoRa Gateway</span>
+                <div class="status-dot" id="dot-gateway"></div>
+            </div>
+            <div class="node-data">Nodos Activos: 1</div>
+        </div>
+
+        <div class="hardware-node" id="water-pump">
+            <div class="node-header">
+                <span class="hardware-icon">💧</span><span class="hardware-label">Est. Bombeo</span>
+                <div class="status-dot" id="dot-pump"></div>
+            </div>
+            <div class="node-data">Agua: <span id="valv-agua">CERRADA</span></div>
+            <div class="node-data">NPK: <span id="valv-npk">CERRADO</span></div>
+        </div>
+
+        <div class="hardware-node" id="sensor-node">
+            <div class="node-header">
+                <span class="hardware-icon">🌡️</span><span class="hardware-label">Sensor Suelo</span>
+                <div class="status-dot" id="dot-sensor"></div>
+            </div>
+            <div class="node-data">Hum: <span id="hum-val">60</span>%</div>
+            <div class="progress-bar"><div class="progress-fill" id="hum-bar" style="width: 60%; background: #3498db;"></div></div>
+            <div class="node-data" style="margin-top:5px;">Temp: <span id="temp-val">22</span>°C</div>
+        </div>
+
+        <div id="plant" class="hardware-node">🌿</div>
+    </div>
+
+    <div class="controls">
+        <button class="btn-dry" onclick="simularSequia()">🔥 Ola de Calor</button>
+        <button class="btn-rain" onclick="simularLluvia()">⛈️ Lluvia Intensa</button>
+        <button class="btn-chem" onclick="simularVenturi()">🧪 Fertirriego</button>
+        <button class="btn-power" onclick="simularFalloEnergia()">🔋 Fallo Solar</button>
+        <button class="btn-reset" onclick="reiniciarSistema()">🔄 Restablecer Todo</button>
+    </div>
+
+    <div class="bottom-panel">
+        <div class="log-panel" id="console-log">
+            > [Sistema GranaSmart] Iniciando módulos core...<br>
+            > Enlace Starlink establecido. Telemetría LoRaWAN operativa.<br>
+            > Módulo analítico (Chart.js) montado.<br>
+        </div>
+        <div class="chart-panel">
+            <canvas id="historyChart"></canvas>
+        </div>
+    </div>
+
+    <script>
+        // --- CONFIGURACIÓN DEL GRÁFICO (Chart.js) ---
+        const ctx = document.getElementById('historyChart').getContext('2d');
+        let timeLabels = ['00s', '02s', '04s', '06s', '08s', '10s'];
+        let humData = [60, 60, 60, 60, 60, 60];
+        let tempData = [22, 22, 22, 22, 22, 22];
+
+        const historyChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: timeLabels,
+                datasets: [
+                    {
+                        label: 'Humedad Suelo (%)',
+                        data: humData,
+                        borderColor: '#38bdf8',
+                        backgroundColor: 'rgba(56, 189, 248, 0.2)',
+                        borderWidth: 2,
+                        tension: 0.4,
+                        fill: true
+                    },
+                    {
+                        label: 'Temperatura (°C)',
+                        data: tempData,
+                        borderColor: '#f59e0b',
+                        backgroundColor: 'transparent',
+                        borderWidth: 2,
+                        tension: 0.4,
+                        borderDash: [5, 5]
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                color: '#cbd5e1',
+                scales: {
+                    y: { 
+                        min: 0, max: 100,
+                        grid: { color: 'rgba(255,255,255,0.1)' },
+                        ticks: { color: '#94a3b8' }
+                    },
+                    x: {
+                        grid: { display: false },
+                        ticks: { color: '#94a3b8' }
+                    }
+                },
+                plugins: {
+                    legend: { labels: { color: '#cbd5e1', font: { size: 10 } } }
+                }
+            }
+        });
+
+        function updateChart(newHum, newTemp) {
+            // Eliminar el primer dato y agregar el nuevo al final
+            humData.shift();
+            humData.push(newHum);
+            tempData.shift();
+            tempData.push(newTemp);
+            
+            // Actualizar etiquetas de tiempo (simulado)
+            let lastLabel = parseInt(timeLabels[timeLabels.length - 1].replace('s', ''));
+            timeLabels.shift();
+            timeLabels.push((lastLabel + 2) + 's');
+
+            historyChart.update();
+        }
+
+        // --- LÓGICA DEL HARDWARE ---
+        const logConsole = document.getElementById('console-log');
+        let timerTimeouts = []; 
+        let chartInterval;
+
+        function logMsg(msg, color = "#4ade80") {
+            const time = new Date().toLocaleTimeString();
+            logConsole.innerHTML += `<span style="color:${color}">[${time}] ${msg}</span><br>`;
+            logConsole.scrollTop = logConsole.scrollHeight;
+        }
+
+        function limpiarTimeouts() {
+            timerTimeouts.forEach(t => clearTimeout(t));
+            timerTimeouts = [];
+            clearInterval(chartInterval);
+        }
+
+        // Simulador de datos constantes (cada 2 segundos actualiza el gráfico)
+        function iniciarMonitoreoContinuo() {
+            chartInterval = setInterval(() => {
+                let currentHum = parseInt(document.getElementById('hum-val').innerText);
+                let currentTemp = parseInt(document.getElementById('temp-val').innerText);
+                updateChart(currentHum, currentTemp);
+            }, 2000);
+        }
+
+        // Iniciar monitoreo al cargar
+        iniciarMonitoreoContinuo();
+
+        // --- ESCENARIOS DE SIMULACIÓN ---
+        function simularSequia() {
+            reiniciarSistema(false);
+            logMsg("⚠️ ALERTA: Temperatura disparada. Suelo perdiendo humedad.", "#f59e0b");
+            
+            // Cambiar valores en la UI
+            document.getElementById('temp-val').innerText = "36";
+            document.getElementById('hum-val').innerText = "20";
+            document.getElementById('hum-bar').style.width = "20%";
+            document.getElementById('hum-bar').style.background = "var(--color-alert)";
+            document.getElementById('dot-sensor').style.background = "var(--color-alert)";
+            
+            // Actualizar gráfico de inmediato
+            updateChart(20, 36);
+
+            secuenciaDatos(() => {
+                logMsg("✅ Nube autoriza RIEGO. Electroválvula H2O abierta.", "#38bdf8");
+                document.getElementById('valv-agua').innerText = "ABIERTA";
+                document.getElementById('valv-agua').style.color = "var(--color-water)";
+                document.getElementById('dot-pump').style.background = "var(--color-water)";
+                document.getElementById('line-gateway-pump').classList.add('watering');
+                document.getElementById('plant').innerText = "🌿💦";
+                document.getElementById('plant').classList.add('watering');
+                
+                // Simular que el riego sube la humedad gradualmente
+                timerTimeouts.push(setTimeout(() => {
+                    document.getElementById('hum-val').innerText = "75";
+                    document.getElementById('hum-bar').style.width = "75%";
+                    document.getElementById('hum-bar').style.background = "var(--color-ok)";
+                    document.getElementById('temp-val').innerText = "25";
+                    updateChart(75, 25);
+                    logMsg("Humedad recuperada. Riego completado.", "#4ade80");
+                }, 3000));
+            });
+        }
+
+        function simularLluvia() {
+            reiniciarSistema(false);
+            logMsg("⛈️ ALERTA CLIMÁTICA: Lluvia intensa.", "#38bdf8");
+            document.getElementById('rain-fx').classList.add('rain-active');
+            
+            // Simular caída de temperatura y subida de humedad
+            document.getElementById('temp-val').innerText = "18";
+            updateChart(60, 18);
+
+            timerTimeouts.push(setTimeout(() => {
+                logMsg("Humedad del suelo alcanzando saturación (98%).", "#4ade80");
+                document.getElementById('hum-val').innerText = "98";
+                document.getElementById('hum-bar').style.width = "98%";
+                document.getElementById('hum-bar').style.background = "var(--color-water)";
+                document.getElementById('valv-agua').innerText = "BLOQUEO (Lluvia)";
+                document.getElementById('valv-agua').style.color = "#94a3b8";
+                updateChart(98, 18);
+            }, 2000));
+        }
+
+        function simularVenturi() {
+            reiniciarSistema(false);
+            logMsg("🧪 ORDEN RECIBIDA: Inyección de nutrientes/fungicida.", "#c084fc");
+            
+            secuenciaDatos(() => {
+                logMsg("✅ Inyector Venturi ACTIVADO.", "#c084fc");
+                document.getElementById('valv-npk').innerText = "INYECTANDO";
+                document.getElementById('valv-npk').style.color = "var(--color-chem)";
+                document.getElementById('valv-agua').innerText = "ABIERTA";
+                
+                document.getElementById('dot-pump').style.background = "var(--color-chem)";
+                document.getElementById('line-gateway-pump').classList.add('chem-inject');
+                document.getElementById('plant').innerText = "🌿✨";
+                document.getElementById('plant').classList.add('chem-inject');
+            });
+        }
+
+        function simularFalloEnergia() {
+            reiniciarSistema(false);
+            logMsg("🔋 ERROR CRÍTICO: Batería al 10%.", "#ef4444");
+            
+            document.getElementById('bat-val').innerText = "10";
+            document.getElementById('bat-bar').style.width = "10%";
+            document.getElementById('bat-bar').style.background = "var(--color-alert)";
+            document.getElementById('dot-solar').style.background = "var(--color-alert)";
+
+            timerTimeouts.push(setTimeout(() => {
+                logMsg("⚠️ Activando MODO AHORRO. Bloqueando bombas mecánicas.", "#f59e0b");
+                document.getElementById('valv-agua').innerText = "DESHABILITADA";
+                document.getElementById('valv-npk').innerText = "DESHABILITADA";
+                document.getElementById('dot-pump').style.background = "#475569";
+                document.getElementById('line-gateway-pump').style.backgroundColor = "rgba(255,0,0,0.2)";
+                document.getElementById('line-gateway-pump').classList.add('alert-line');
+            }, 1500));
+        }
+
+        function secuenciaDatos(callbackFinal) {
+            timerTimeouts.push(setTimeout(() => {
+                logMsg("📡 Sensor -> Gateway [Enviando trama LoRaWAN]", "#f59e0b");
+                document.getElementById('line-sensor-gateway').classList.add('transmitting');
+                document.getElementById('dot-gateway').style.background = "var(--color-data)";
+            }, 800));
+
+            timerTimeouts.push(setTimeout(() => {
+                document.getElementById('line-sensor-gateway').classList.remove('transmitting');
+                logMsg("🛰️ Gateway -> AWS Cloud [Vía Starlink]", "#f59e0b");
+                document.getElementById('line-gateway-starlink').classList.add('transmitting');
+                document.getElementById('dot-starlink').style.background = "var(--color-data)";
+            }, 2000));
+
+            timerTimeouts.push(setTimeout(() => {
+                document.getElementById('line-gateway-starlink').classList.remove('transmitting');
+                document.getElementById('dot-gateway').style.background = "var(--color-ok)";
+                document.getElementById('dot-starlink').style.background = "var(--color-ok)";
+                callbackFinal();
+            }, 3500));
+        }
+
+        function reiniciarSistema(showLog = true) {
+            limpiarTimeouts();
+            if(showLog) {
+                logMsg("🔄 Reiniciando parámetros a valores nominales...", "#94a3b8");
+                updateChart(60, 22);
+            }
+            
+            document.getElementById('rain-fx').classList.remove('rain-active');
+            
+            document.getElementById('bat-val').innerText = "98";
+            document.getElementById('bat-bar').style.width = "98%";
+            document.getElementById('bat-bar').style.background = "var(--color-ok)";
+            
+            document.getElementById('hum-val').innerText = "60";
+            document.getElementById('temp-val').innerText = "22";
+            document.getElementById('hum-bar').style.width = "60%";
+            document.getElementById('hum-bar').style.background = "#3498db";
+            
+            document.getElementById('valv-agua').innerText = "CERRADA";
+            document.getElementById('valv-agua').style.color = "#cbd5e1";
+            document.getElementById('valv-npk').innerText = "CERRADO";
+            document.getElementById('valv-npk').style.color = "#cbd5e1";
+
+            const dots = ['dot-solar', 'dot-sensor', 'dot-gateway', 'dot-starlink', 'dot-pump'];
+            dots.forEach(id => document.getElementById(id).style.background = "var(--color-ok)");
+
+            const lines = ['line-sensor-gateway', 'line-gateway-starlink', 'line-gateway-pump'];
+            lines.forEach(id => {
+                let el = document.getElementById(id);
+                el.className = "connection"; 
+                el.style.backgroundColor = "rgba(255, 255, 255, 0.15)";
+            });
+
+            document.getElementById('plant').innerText = "🌿";
+            document.getElementById('plant').className = "hardware-node"; 
+            
+            iniciarMonitoreoContinuo();
+        }
+    </script>
+</body>
+</html>

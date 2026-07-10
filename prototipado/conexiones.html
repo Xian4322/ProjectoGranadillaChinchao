@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Esquema de Hardware - GranaSmart Wiring</title>
+    <style>
+        :root {
+            --bg-grid: #1e1e1e;
+            --grid-line: #2a2a2a;
+            --wire-vcc: #e74c3c;
+            --wire-gnd: #2c3e50;
+            --wire-signal: #f1c40f;
+            --wire-earth: #2ecc71;
+            --panel-bg: #2b2b2b;
+        }
+
+        body {
+            margin: 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #121212;
+            color: white;
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        /* Lienzo estilo Tinkercad (Cuadrícula) */
+        .workspace {
+            flex: 1;
+            position: relative;
+            background-color: var(--bg-grid);
+            background-image: 
+                linear-gradient(var(--grid-line) 1px, transparent 1px),
+                linear-gradient(90deg, var(--grid-line) 1px, transparent 1px);
+            background-size: 20px 20px;
+            overflow: hidden;
+        }
+
+        /* Panel Lateral de Información */
+        .info-panel {
+            width: 300px;
+            background-color: var(--panel-bg);
+            border-left: 2px solid #333;
+            padding: 20px;
+            box-shadow: -5px 0 15px rgba(0,0,0,0.5);
+            display: flex;
+            flex-direction: column;
+            z-index: 100;
+        }
+
+        .info-panel h2 {
+            margin-top: 0;
+            color: #38bdf8;
+            font-size: 1.2rem;
+            border-bottom: 1px solid #444;
+            padding-bottom: 10px;
+        }
+
+        .detail-box {
+            background: #1a1a1a;
+            border: 1px solid #444;
+            border-radius: 8px;
+            padding: 15px;
+            margin-top: 20px;
+            flex-grow: 1;
+        }
+
+        .btn-test {
+            background: #e67e22;
+            color: white;
+            border: none;
+            padding: 12px;
+            font-weight: bold;
+            border-radius: 5px;
+            cursor: pointer;
+            margin-top: 15px;
+            transition: 0.3s;
+        }
+
+        .btn-test:hover { background: #d35400; }
+
+        /* Componentes de Hardware */
+        .component {
+            position: absolute;
+            background: #333;
+            border: 2px solid #555;
+            border-radius: 8px;
+            padding: 10px;
+            text-align: center;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.4);
+            font-size: 0.8rem;
+            user-select: none;
+            z-index: 10;
+        }
+
+        .comp-title { font-weight: bold; margin-bottom: 5px; color: #ddd; }
+        .comp-icon { font-size: 2rem; margin-bottom: 5px; }
+        
+        /* Pines de conexión */
+        .pin {
+            width: 10px;
+            height: 10px;
+            background: #aaa;
+            border-radius: 50%;
+            position: absolute;
+            border: 2px solid #222;
+        }
+        
+        .pin.red { background: var(--wire-vcc); }
+        .pin.black { background: var(--wire-gnd); }
+        .pin.yellow { background: var(--wire-signal); }
+        .pin.green { background: var(--wire-earth); }
+
+        /* Posiciones de los componentes */
+        #c-solar { top: 40px; left: 40px; width: 120px; border-color: #3498db; }
+        #c-mppt { top: 200px; left: 40px; width: 140px; border-color: #9b59b6; }
+        #c-battery { top: 380px; left: 40px; width: 120px; border-color: #f1c40f; }
+        #c-iot { top: 200px; left: 350px; width: 140px; border-color: #2ecc71; }
+        #c-relay { top: 200px; left: 600px; width: 100px; border-color: #e67e22; }
+        #c-valve { top: 380px; left: 600px; width: 120px; border-color: #34495e; }
+        #c-earth { top: 500px; left: 250px; width: 80px; border-color: var(--wire-earth); border-radius: 0 0 20px 20px;}
+
+        /* Capa SVG para los cables */
+        #wires-layer {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            z-index: 5;
+            pointer-events: none; /* Deja pasar clics a los componentes */
+        }
+
+        .wire {
+            fill: none;
+            stroke-width: 4;
+            pointer-events: stroke; /* Hace que la línea sea clickeable */
+            cursor: pointer;
+            transition: stroke-width 0.2s;
+        }
+
+        .wire:hover {
+            stroke-width: 8;
+            filter: drop-shadow(0 0 5px rgba(255,255,255,0.5));
+        }
+
+        /* Animación de corriente */
+        .wire-animated {
+            stroke-dasharray: 10;
+            animation: flow 0.5s linear infinite;
+        }
+
+        @keyframes flow {
+            to { stroke-dashoffset: -20; }
+        }
+
+    </style>
+</head>
+<body>
+
+    <div class="workspace">
+        <svg id="wires-layer">
+            <path id="w-solar-mppt-vcc" class="wire" stroke="#e74c3c" d="M 100 125 L 100 160 L 80 160 L 80 200" onclick="showInfo('solar_vcc')"/>
+            <path id="w-solar-mppt-gnd" class="wire" stroke="#2c3e50" d="M 120 125 L 120 170 L 140 170 L 140 200" onclick="showInfo('solar_gnd')"/>
+
+            <path id="w-mppt-bat-vcc" class="wire" stroke="#e74c3c" d="M 80 295 L 80 380" onclick="showInfo('bat_vcc')"/>
+            <path id="w-mppt-bat-gnd" class="wire" stroke="#2c3e50" d="M 140 295 L 140 380" onclick="showInfo('bat_gnd')"/>
+
+            <path id="w-mppt-iot-vcc" class="wire" stroke="#e74c3c" d="M 180 220 L 350 220" onclick="showInfo('iot_vcc')"/>
+            <path id="w-mppt-iot-gnd" class="wire" stroke="#2c3e50" d="M 180 240 L 350 240" onclick="showInfo('iot_gnd')"/>
+
+            <path id="w-iot-relay-sig" class="wire" stroke="#f1c40f" d="M 490 220 L 600 220" onclick="showInfo('relay_sig')"/>
+            <path id="w-iot-relay-gnd" class="wire" stroke="#2c3e50" d="M 490 240 L 600 240" onclick="showInfo('relay_gnd')"/>
+
+            <path id="w-bat-relay-vcc" class="wire" stroke="#e74c3c" d="M 160 420 L 680 420 L 680 295" onclick="showInfo('valve_power')"/>
+            <path id="w-relay-valve-vcc" class="wire" stroke="#e74c3c" d="M 640 295 L 640 380" onclick="showInfo('valve_switch')"/>
+            <path id="w-valve-bat-gnd" class="wire" stroke="#2c3e50" d="M 680 470 L 680 480 L 100 480 L 100 470" onclick="showInfo('valve_gnd')"/>
+
+            <path id="w-mppt-earth" class="wire" stroke="#2ecc71" d="M 110 295 L 110 520 L 250 520" onclick="showInfo('earth_mppt')"/>
+            <path id="w-iot-earth" class="wire" stroke="#2ecc71" d="M 420 295 L 420 520 L 330 520" stroke-dasharray="5,5" onclick="showInfo('earth_iot')"/>
+        </svg>
+
+        <div class="component" id="c-solar">
+            <div class="comp-icon">☀️</div>
+            <div class="comp-title">Panel Solar</div>
+            <div>24V DC / 400W</div>
+        </div>
+
+        <div class="component" id="c-mppt">
+            <div class="comp-icon">🎛️</div>
+            <div class="comp-title">Controlador MPPT</div>
+            <div>Gestión de Carga</div>
+        </div>
+
+        <div class="component" id="c-battery">
+            <div class="comp-icon">🔋</div>
+            <div class="comp-title">Batería Gel</div>
+            <div>24V / 100Ah</div>
+        </div>
+
+        <div class="component" id="c-iot">
+            <div class="comp-icon">🧠</div>
+            <div class="comp-title">Nodo IoT (Cerebro)</div>
+            <div>Microcontrolador + LoRa</div>
+        </div>
+
+        <div class="component" id="c-relay">
+            <div class="comp-icon">🔌</div>
+            <div class="comp-title">Módulo Relé</div>
+            <div>Optoacoplado</div>
+        </div>
+
+        <div class="component" id="c-valve">
+            <div class="comp-icon">🚰</div>
+            <div class="comp-title">Electroválvula</div>
+            <div>24V DC / Agua</div>
+        </div>
+
+        <div class="component" id="c-earth">
+            <div class="comp-icon">⏚</div>
+            <div class="comp-title">Jabalina</div>
+            <div>Tierra Física</div>
+        </div>
+    </div>
+
+    <div class="info-panel">
+        <h2>Diagrama de Conexiones</h2>
+        <p style="font-size: 0.9rem; color: #aaa;">Haz clic en cualquier cable de la cuadrícula para ver el detalle de ingeniería y voltaje.</p>
+        
+        <div class="detail-box">
+            <h3 id="info-title" style="margin-top: 0; color: #fff;">Selecciona un cable</h3>
+            <p id="info-desc" style="font-size: 0.9rem; color: #ccc;">Esperando interacción...</p>
+            <div id="info-voltage" style="font-family: monospace; color: #e74c3c; font-weight: bold; margin-top: 10px;"></div>
+        </div>
+
+        <button class="btn-test" onclick="toggleCorriente()" id="btnTest">⚡ Simular Paso de Corriente</button>
+    </div>
+
+    <script>
+        // Diccionario de información de cada conexión
+        const wireData = {
+            'solar_vcc': { title: 'Línea Positiva (Panel)', desc: 'Cable solar fotovoltaico (Rojo). Lleva la energía sin regular desde los paneles hasta la entrada FV del controlador MPPT.', vol: 'Voltaje: ~36V - 45V DC' },
+            'solar_gnd': { title: 'Línea Negativa (Panel)', desc: 'Cable solar fotovoltaico (Negro). Retorno de corriente de los paneles solares.', vol: 'Voltaje: 0V (Referencia)' },
+            'bat_vcc': { title: 'Carga Batería (VCC)', desc: 'Cable grueso AWG 8. El MPPT envía energía regulada para cargar la batería o extrae energía de ella durante la noche.', vol: 'Voltaje: 24V - 28.8V DC' },
+            'bat_gnd': { title: 'Tierra Batería (GND)', desc: 'Conexión al borne negativo de la batería de Gel.', vol: 'Voltaje: 0V' },
+            'iot_vcc': { title: 'Alimentación IoT', desc: 'Salida de carga (Load) del MPPT hacia un conversor Step-Down que alimenta la placa del microcontrolador y el módulo LoRa.', vol: 'Voltaje: 5V DC (Regulado)' },
+            'iot_gnd': { title: 'Tierra Común (IoT)', desc: 'Unifica la tierra del controlador con la tierra lógica del microcontrolador para evitar ruidos eléctricos.', vol: 'Voltaje: 0V' },
+            'relay_sig': { title: 'Señal de Control (GPIO)', desc: 'Cable de señal (Amarillo). El microcontrolador envía un pulso lógico (HIGH) para excitar la bobina del relé y abrir la válvula.', vol: 'Voltaje: 3.3V DC (Señal Lógica)' },
+            'relay_gnd': { title: 'Tierra del Relé', desc: 'Cierra el circuito lógico entre el microcontrolador y el optoacoplador del relé.', vol: 'Voltaje: 0V' },
+            'valve_power': { title: 'Potencia hacia Válvula', desc: 'Línea directa de 24V desde la batería hacia el contacto COMÚN (COM) del relé de alta potencia.', vol: 'Corriente Alta: 24V DC' },
+            'valve_switch': { title: 'Conmutación de Válvula', desc: 'Sale del contacto Normalmente Abierto (NO) del relé. Cuando el IoT manda la señal, este cable se energiza y abre el flujo de agua.', vol: 'Voltaje: 0V (Cerrada) / 24V (Abierta)' },
+            'valve_gnd': { title: 'Retorno Válvula', desc: 'Cierra el circuito de alta potencia de la electroválvula de regreso al borne negativo de la batería.', vol: 'Voltaje: 0V' },
+            'earth_mppt': { title: 'Puesta a Tierra (Gabinete)', desc: 'Cable de protección (Verde/Amarillo) conectado a la jabalina de cobre en el suelo. Protege los equipos contra descargas atmosféricas (rayos) y estática.', vol: 'Protección: Fuga a Tierra' },
+            'earth_iot': { title: 'Malla/Apantallamiento', desc: 'Conecta las carcasas metálicas y mallas de los cables de comunicación a tierra para evitar interferencias electromagnéticas (EMI) en las lecturas de los sensores.', vol: 'Protección EMI' }
+        };
+
+        // Función para mostrar información en el panel
+        function showInfo(wireId) {
+            const data = wireData[wireId];
+            if(data) {
+                document.getElementById('info-title').innerText = data.title;
+                document.getElementById('info-desc').innerText = data.desc;
+                document.getElementById('info-voltage').innerText = data.vol;
+            }
+        }
+
+        // Función para animar los cables (Paso de corriente)
+        let isAnimated = false;
+        function toggleCorriente() {
+            const wires = document.querySelectorAll('.wire');
+            const btn = document.getElementById('btnTest');
+
+            isAnimated = !isAnimated;
+            
+            wires.forEach(wire => {
+                // No animar las conexiones a tierra (no llevan corriente continua normal)
+                if(wire.id !== 'w-mppt-earth' && wire.id !== 'w-iot-earth') {
+                    if(isAnimated) {
+                        wire.classList.add('wire-animated');
+                    } else {
+                        wire.classList.remove('wire-animated');
+                    }
+                }
+            });
+
+            if(isAnimated) {
+                btn.innerText = "⏹️ Detener Simulación";
+                btn.style.background = "#c0392b";
+                
+                // Forzar información de riego activo
+                showInfo('valve_switch');
+            } else {
+                btn.innerText = "⚡ Simular Paso de Corriente";
+                btn.style.background = "#e67e22";
+            }
+        }
+    </script>
+</body>
+</html>
